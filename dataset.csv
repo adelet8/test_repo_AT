@@ -1,4 +1,4 @@
-rack_id,server_id,gpus_capacity,gpus_in_use,cpus_per_server,cpu_load_pct,avg_gpu_temp_C,ambient_temp_C,humidity_pct,power_W,status
+rack_id,server_id,gpus_per_server,gpus_in_use,cpus_per_server,cpu_load_pct,avg_gpu_temp_C,ambient_temp_C,humidity_pct,power_W,status
 1B,srv-1B-01,8,2,64,38,68,23,42,850,OK
 2C,srv-2C-01,8,0,64,35,64,22,41,820,OK
 2D,srv-2D-02,8,1,64,47,71,23,40,880,OK
