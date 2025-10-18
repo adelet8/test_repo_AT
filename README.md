@@ -1,10 +1,8 @@
 # Prompt: Analysis GPU Failure Rates within Data Centers 
 
+ This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows. 
 
-
-## This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows. 
-
-## The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
+ The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
 
 ## Specifically, the system answers two key questions:
 
