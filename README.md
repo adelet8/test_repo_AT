@@ -34,3 +34,6 @@ GPU-A100-008,GPU,srv-3C-01,3C,Room-02,88,25,46,FAIL
 
 https://shiny.posit.co/r/gallery/#user-showcase
 
+good example :
+https://shiny.posit.co/r/gallery/miscellaneous/lego-world/
+
