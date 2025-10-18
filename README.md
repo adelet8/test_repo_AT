@@ -32,6 +32,9 @@ CPU-64C-001,CPU,srv-1B-02,1B,Room-01,61,23,41,OK
 GPU-A100-008,GPU,srv-3C-01,3C,Room-02,88,25,46,FAIL
 
 
+https://www.servermania.com/kb/articles/gpu-temperature-range-guide
+
+
 https://shiny.posit.co/r/gallery/#user-showcase
 
 good example :
