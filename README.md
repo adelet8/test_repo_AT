@@ -2,13 +2,16 @@
 
 # Specifically, the system answers two key questions:
 
+
 a) When and where are GPU failures occurring within the data center?
+
 
 b) How can temperature and variance thresholds be adjusted to fit user-defined preferences?
 
+
 # The project uses three datasets to model statistical process control (SPC) across data center components:
 
-dataset.csv — system-level data capturing room, rack, and server temperature behavior. Used for baseline process control and hierarchical SPC models.
+dataset.csv - system-level data capturing room, rack, and server temperature behavior. Used for baseline process control and hierarchical SPC models.
 
 gpu_data(1).csv — component-level GPU telemetry for monitoring process variance, sigma-short metrics, and failure precursors.
 
@@ -17,6 +20,7 @@ crazy_data.csv — synthetic anomaly dataset used to validate SPC detection thre
 # Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
 
 # TEAM
+
 Brandy, Juan, Adele, Michael 
 
 
@@ -34,6 +38,7 @@ The dashboard provides both high-level system views and component-level diagnost
 
 # Number of CPUs per server
 
+
 These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
 
 
@@ -42,6 +47,7 @@ These metrics give an at-a-glance summary of infrastructure health while enablin
 The first and largest dataset that we developed was the (dataset.csv). Each row represents a single processing asset—GPU or CPU—along with its physical and environmental context. The structure is designed for clarity and traceability, allowing us to move fluidly between system-wide behavior and individual component performance.
 
 # By linking every asset to its server, rack, and room, this dataset enables hierarchical analysis that connects local events (like a GPU overheating) to broader operational trends across the data center.
+
 
 | Column         | Description                                                                                    |
 | -------------- | ---------------------------------------------------------------------------------------------- |
@@ -55,12 +61,15 @@ The first and largest dataset that we developed was the (dataset.csv). Each row 
 | `humidity_pct` | Relative humidity (%) inside the room.                                                         |
 | `status`       | Operational state of the asset: `OK`, `WARN`, or `FAIL`.                                       |
 
+
 #  GPU data
 
 gpu_data(1).csv focuses specifically on GPU-level performance and thermal metrics.
 While dataset.csv provides the larger system context, this file isolates the behavior of GPUs themselves — allowing for finer control, variance tracking, and process stability analysis.
 
+
 Each record captures temperature and status data at the component level, forming the foundation for sigma-short calculations, reliability metrics, and control charts such as Individuals–Moving Range (I–MR) and X̄–S.
+
 
 | Column       | Description                                                                                                              |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
@@ -81,7 +90,9 @@ This structure allows for precise time-series tracking of each GPU, making it st
 
 # crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
 
+
 It’s designed to simulate unexpected operating conditions—rapid temperature spikes, inconsistent readings, or correlated rack-level faults—and is essential for validating that the dashboard’s control limits and sigma thresholds perform as intended.
+
 
 | Column       | Description                                                                                                   |
 | ------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -93,7 +104,9 @@ It’s designed to simulate unexpected operating conditions—rapid temperature 
 | `temp_c`     | Recorded temperature (°C) under simulated stress or outlier conditions.                                       |
 | `status`     | Observed system response (`OK`, `WARN`, `FAIL`), used to confirm correct alert behavior under extreme inputs. |
 
+
 # Dataset Relationship Overview
+
 
 The three datasets—dataset.csv, gpu_data(1).csv, and crazy_data.csv—are designed to work together as a hierarchical data system.
 Each serves a distinct purpose within the SPC workflow, moving from macro-level operational context to micro-level component behavior and finally to controlled anomaly testing.
