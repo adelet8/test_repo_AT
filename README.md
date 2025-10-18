@@ -4,7 +4,7 @@
 
  The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
 
-Specifically, the system answers two key questions:
+## Specifically, the system answers two key questions:
 
 
 a) When and where are GPU failures occurring within the data center?
@@ -21,6 +21,7 @@ gpu_data(1).csv — component-level GPU telemetry for monitoring process varianc
 
 crazy_data.csv — synthetic anomaly dataset used to validate SPC detection thresholds and identify instability under stress conditions.
 
+
 ## Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
 
 
@@ -31,6 +32,7 @@ Brandy, Juan, Adele, Michael
 
 
 # The Dashboard
+
 
 The dashboard provides both high-level system views and component-level diagnostics, including a sidebar that displays:
 
@@ -117,8 +119,10 @@ It’s designed to simulate unexpected operating conditions—rapid temperature 
 The three datasets—dataset.csv, gpu_data(1).csv, and crazy_data.csv—are designed to work together as a hierarchical data system.
 Each serves a distinct purpose within the SPC workflow, moving from macro-level operational context to micro-level component behavior and finally to controlled anomaly testing.
 
+
 This structure mirrors the way a real data center operates: stable at the top level, variable at the component level, and unpredictable under failure or stress.
 By modeling data at all three scales, the system can detect deviations early, trace their origin, and validate its own reliability under extreme conditions.
+
 
  | Level                 | Dataset           | Focus                     | Example Use                                                                                     |
 | --------------------- | ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -126,7 +130,9 @@ By modeling data at all three scales, the system can detect deviations early, tr
 | **Component-Level**   | `gpu_data(1).csv` | Individual GPUs           | Track process variation, temperature stability, and sigma-short behavior for each GPU.          |
 | **Stress-Test Level** | `crazy_data.csv`  | Simulated anomalies       | Test alert thresholds and control limits under extreme temperature or performance fluctuations. |
 
-## Why It Works
+
+
+## Why it Works
 
 This layered approach ensures:
 
@@ -135,5 +141,6 @@ This layered approach ensures:
 - Scalability:  Models can expand to include additional sensors or performance metrics.
 
 -  Validation:   System response can be tested against synthetic or real-world anomalies.
+
 
  In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
