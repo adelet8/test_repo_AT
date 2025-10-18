@@ -27,7 +27,7 @@ Each dataset represents a different layer of operational insight — from macro 
 
 ## TEAM
 
-Brandy, Juan, Adele, Michael 
+Brandy Kinnunen, Juan Rodriguez, Adele Thompson, Michael Fizdale
 
 
 
