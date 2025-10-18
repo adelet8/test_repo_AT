@@ -108,10 +108,10 @@ By modeling data at all three scales, the system can detect deviations early, tr
 
 This layered approach ensures:
 
-# Traceability – every data point can be connected from component to environment.
+# Traceability: Every data point can be connected from component to environment.
 
-# Scalability – models can expand to include additional sensors or performance metrics.
+# Scalability:  Models can expand to include additional sensors or performance metrics.
 
-# Validation – system response can be tested against synthetic or real-world anomalies.
+# Validation:   System response can be tested against synthetic or real-world anomalies.
 
-In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
+# In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
