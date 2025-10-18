@@ -22,10 +22,10 @@ gpu_data(1).csv — component-level GPU telemetry for monitoring process varianc
 crazy_data.csv — synthetic anomaly dataset used to validate SPC detection thresholds and identify instability under stress conditions.
 
 
-## Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
+Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
 
 
-##TEAM
+## TEAM
 
 Brandy, Juan, Adele, Michael 
 
@@ -47,7 +47,7 @@ The dashboard provides both high-level system views and component-level diagnost
 -  Number of CPUs per server
 
 
-## These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
+These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
 
 
 ## Dataset Structures
@@ -144,3 +144,19 @@ This layered approach ensures:
 
 
  In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
+
+ ## How it Works
+
+ A dashboard was created to visualize the temperature data for each of the components and layers in a Data Center - from the Data Center Rooms, to the racks, the servers, and the GPUs themselves. In order to run the dashboard, the user will need to have the "SPC.R" functions saved in the same directory as the "app.r" file. These functions were adapted to the model from Dr. Timothy Fraser's statistical process control functions for r-code. These functions were used to generate the Average and Standard Deviation plots, as well as the control process indices. 
+ 
+  Additionally, the user will need to download the .csv files with the temperature data, as described above. These files do not need to be saved in the same directory as the "app.r" file because the user will be able to upload them directly into the dashboard. This feature was provided to allow users (Data Center workers or management) to analyze their own datasets, as long as the required data columns are present.
+  
+  Another input the user needs to be aware of are the Specification Limits. These are enabled through a check-box that the user can toggle. When checked-on, the specification limits are plotted on the temperature-time graph, as well as the data histogram. Since specification limits are user defined (i.e. the data center who is operating the racks, servers, and GPUs), the limits may vary between different customers, based on the quality of equipment they are using and the amount of risk they are willing to assume. As a result, sliding bars were utilized to allow the user to define their specification limits. When temperature values violate these thresholds (both upper and lower), the GPUs are considered to have failed. These failures are indicated by highlighting the data points "red" (high out of spec) or "blue" (low out of spec).
+
+  ## Conclusion
+
+  The dashboard will allow users to gain a quick and visual means for identifying failed GPUs and tracking trends that could indicate elevated risk of concern.
+
+
+
+  
