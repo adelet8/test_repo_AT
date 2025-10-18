@@ -1,4 +1,4 @@
-# app.R — SPC Temperature Dashboard (Room → Rack → Server)
+# app.R — SPC Temperature Dashboard (Rack → Server → GPU)
 # Click treemap to drill; plots update instantly.
 # Packages: shiny, bslib, readr, dplyr, tidyr, ggplot2, plotly, scales, lubridate
 
@@ -14,7 +14,9 @@ library(lubridate)
 
 `%||%` <- function(a,b) if (!is.null(a)) a else b
 
-REQ_COLS <- c("timestamp","room_id","rack_id","server_id","asset_type","temp_c")
+# Expect this schema in spc_dataset.csv:
+# timestamp, rack_id, server_id, gpu_id, asset_type, temp_c
+REQ_COLS <- c("timestamp","rack_id","server_id","gpu_id","asset_type","temp_c")
 num <- function(x) suppressWarnings(as.numeric(x))
 
 capability <- function(x, LSL, USL){
@@ -28,33 +30,42 @@ capability <- function(x, LSL, USL){
   list(mean=m, sd=s, Cp=Cp, Cpk=Cpk, Pp=Cp, Ppk=Cpk, pct_oos=pct_oos)
 }
 
+# Build treemap hierarchy: Rack -> Server -> GPU
 build_treemap_df <- function(df){
-  rooms <- df %>% count(room_id, name="n")
-  racks <- df %>% count(room_id, rack_id, name="n")
-  srvs  <- df %>% count(room_id, rack_id, server_id, name="n")
-  r <- rooms %>% transmute(id = room_id, label = room_id, parent="ROOT", value=n)
-  k <- racks %>% transmute(id=paste(room_id,rack_id,sep="|"), label=rack_id, parent=room_id, value=n)
-  s <- srvs  %>% transmute(id=paste(room_id,rack_id,server_id,sep="|"),
-                           label=server_id, parent=paste(room_id,rack_id,sep="|"), value=n)
-  bind_rows(tibble(id="ROOT",label="Rooms",parent=NA_character_,value=NA_integer_), r,k,s)
+  racks   <- df %>% count(rack_id, name="n")
+  servers <- df %>% count(rack_id, server_id, name="n")
+  gpus    <- df %>% filter(!is.na(gpu_id) & gpu_id != "NA" & gpu_id != "") %>%
+    count(rack_id, server_id, gpu_id, name="n")
+  
+  r <- racks %>% transmute(id = rack_id, label = rack_id, parent = "ROOT", value = n)
+  s <- servers %>% transmute(id = paste(rack_id, server_id, sep="|"),
+                             label = server_id, parent = rack_id, value = n)
+  g <- gpus %>% transmute(id = paste(rack_id, server_id, gpu_id, sep="|"),
+                          label = gpu_id, parent = paste(rack_id, server_id, sep="|"),
+                          value = n)
+  
+  bind_rows(
+    tibble(id="ROOT", label="Racks", parent=NA_character_, value=NA_integer_),
+    r, s, g
+  )
 }
 
 ui <- page_fluid(
   theme = bs_theme(bootswatch = "flatly"),
-  h2("SPC — Temperature Control (Room → Rack → Server)"),
+  h2("SPC — Temperature Control (Rack → Server → GPU)"),
   layout_columns(
     col_widths = c(4, 8),
     card(
       card_header("Controls"),
-      checkboxGroupInput("asset_types","Asset types", choices=c("CPU","GPU"),
-                         selected=c("CPU","GPU"), inline=TRUE),
+      checkboxGroupInput("asset_types","Asset types", choices=c("SERVER","GPU"),
+                         selected=c("SERVER","GPU"), inline=TRUE),
       sliderInput("lsl", "Lower Spec Limit (°C)", min=18, max=28, value=22, step=0.1),
-      sliderInput("usl", "Upper Spec Limit (°C)", min=24, max=34, value=27, step=0.1),
+      sliderInput("usl", "Upper Spec Limit (°C)", min=24, max=40, value=30, step=0.1),
       actionButton("reset", "Reset selection"),
       hr(),
       h4("Drilldown selection"),
       verbatimTextOutput("sel_txt"),
-      helpText("Click the treemap to drill Room → Rack → Server. Reset to go back.")
+      helpText("Click the treemap to drill Rack → Server → GPU. Reset to go back.")
     ),
     card(
       layout_columns(
@@ -88,7 +99,8 @@ server <- function(input, output, session){
   # Always load spc_dataset.csv from the app directory
   raw <- reactive({
     path <- c("spc_dataset.csv")[file.exists("spc_dataset.csv")][1]
-    validate(need(isTruthy(path), "Place spc_dataset.csv in the same folder as app.R"))
+    validate(need(isTruthy(path),
+                  "Place spc_dataset.csv in the same folder as app.R"))
     df <- suppressMessages(readr::read_csv(path, show_col_types = FALSE))
     miss <- setdiff(REQ_COLS, names(df))
     validate(need(length(miss)==0, paste("Missing columns:", paste(miss, collapse=", "))))
@@ -96,21 +108,24 @@ server <- function(input, output, session){
       mutate(
         timestamp = lubridate::ymd_hms(timestamp, quiet=TRUE),
         temp_c = num(temp_c),
-        across(c(room_id, rack_id, server_id, asset_type), as.character)
+        rack_id = as.character(rack_id),
+        server_id = as.character(server_id),
+        gpu_id = ifelse(is.na(gpu_id), NA_character_, as.character(gpu_id)),
+        asset_type = as.character(asset_type)
       ) %>%
-      filter(is.finite(temp_c), !is.na(timestamp))
+      filter(!is.na(timestamp), is.finite(temp_c))
   })
   
-  # Selection state
-  sel <- reactiveVal(list(room=NULL, rack=NULL, server=NULL))
-  observeEvent(input$reset, { sel(list(room=NULL, rack=NULL, server=NULL)) })
+  # Selection state (Rack -> Server -> GPU)
+  sel <- reactiveVal(list(rack=NULL, server=NULL, gpu=NULL))
+  observeEvent(input$reset, { sel(list(rack=NULL, server=NULL, gpu=NULL)) })
   
   output$sel_txt <- renderText({
     s <- sel()
     paste0(
-      "Room: ", ifelse(is.null(s$room), "(all)", s$room), "\n",
-      "Rack: ", ifelse(is.null(s$rack), "(all)", s$rack), "\n",
-      "Server: ", ifelse(is.null(s$server), "(all)", s$server)
+      "Rack: ",   ifelse(is.null(s$rack), "(all)", s$rack), "\n",
+      "Server: ", ifelse(is.null(s$server), "(all)", s$server), "\n",
+      "GPU: ",    ifelse(is.null(s$gpu), "(all)", s$gpu)
     )
   })
   
@@ -118,13 +133,13 @@ server <- function(input, output, session){
   dv <- reactive({
     df <- raw() %>% filter(asset_type %in% input$asset_types)
     s <- sel()
-    if (!is.null(s$room))   df <- df %>% filter(room_id  == s$room)
-    if (!is.null(s$rack))   df <- df %>% filter(rack_id  == s$rack)
-    if (!is.null(s$server)) df <- df %>% filter(server_id== s$server)
+    if (!is.null(s$rack))   df <- df %>% filter(rack_id   == s$rack)
+    if (!is.null(s$server)) df <- df %>% filter(server_id == s$server)
+    if (!is.null(s$gpu))    df <- df %>% filter(gpu_id    == s$gpu)
     df
   })
   
-  # Treemap — include customdata so clicks carry the full id
+  # Treemap (Rack -> Server -> GPU); include customdata for reliable clicks
   output$tree <- renderPlotly({
     df <- raw() %>% filter(asset_type %in% input$asset_types)
     validate(need(nrow(df)>0, "No data."))
@@ -140,41 +155,47 @@ server <- function(input, output, session){
       branchvalues = "total",
       hoverinfo = "label+value",
       textinfo = "label+value",
-      customdata = tdf$id   # <-- key fix
+      customdata = tdf$id
     )
   })
   
-  # Click handler — use customdata to update selection
+  # Click handler — parse Rack | Server | GPU from customdata
   observeEvent(event_data("plotly_click", source = "tree"), {
     ed <- event_data("plotly_click", source = "tree")
     if (is.null(ed)) return()
     id <- ed$customdata %||% ed$id
     if (is.null(id) || identical(id, "ROOT")) {
-      sel(list(room=NULL, rack=NULL, server=NULL)); return()
+      sel(list(rack=NULL, server=NULL, gpu=NULL)); return()
     }
     parts <- strsplit(as.character(id), "\\|")[[1]]
     if (length(parts) == 1) {
-      sel(list(room=parts[1], rack=NULL, server=NULL))
+      sel(list(rack=parts[1], server=NULL, gpu=NULL))
     } else if (length(parts) == 2) {
-      sel(list(room=parts[1], rack=parts[2], server=NULL))
+      sel(list(rack=parts[1], server=parts[2], gpu=NULL))
     } else {
-      sel(list(room=parts[1], rack=parts[2], server=parts[3]))
+      sel(list(rack=parts[1], server=parts[2], gpu=parts[3]))
     }
   })
   
-  # Time series — updates on every selection change
+  # Time series — GPU: raw; Server/Rack/All: mean over selection
   output$ts_plot <- renderPlotly({
     df <- dv(); validate(need(nrow(df)>0, ""))
     s <- sel()
-    if (!is.null(s$server)) {
-      pdat <- df %>% filter(server_id==s$server)
-      title <- paste("Server:", s$server)
+    
+    if (!is.null(s$gpu)) {
+      pdat <- df %>% filter(gpu_id == s$gpu)
+      title <- paste("GPU:", s$gpu)
+    } else if (!is.null(s$server)) {
+      pdat <- df %>% group_by(timestamp) %>% summarise(temp_c = mean(temp_c), .groups="drop")
+      title <- paste("Server:", s$server, "(mean)")
+    } else if (!is.null(s$rack)) {
+      pdat <- df %>% group_by(timestamp) %>% summarise(temp_c = mean(temp_c), .groups="drop")
+      title <- paste("Rack:", s$rack, "(mean)")
     } else {
       pdat <- df %>% group_by(timestamp) %>% summarise(temp_c = mean(temp_c), .groups="drop")
-      title <- if (!is.null(s$rack)) paste("Rack:", s$rack, "(mean)")
-      else if (!is.null(s$room)) paste("Room:", s$room, "(mean)")
-      else "All Rooms (mean)"
+      title <- "All Racks (mean)"
     }
+    
     LSL <- input$lsl; USL <- input$usl; med <- median(pdat$temp_c, na.rm=TRUE)
     
     g <- ggplot(pdat, aes(timestamp, temp_c)) +
@@ -190,11 +211,13 @@ server <- function(input, output, session){
     ggplotly(g, tooltip = c("x","y"))
   })
   
-  # Histogram + normal overlay
+  # Histogram + normal overlay for current selection
   output$hist_plot <- renderPlot({
     df <- dv(); validate(need(nrow(df)>0, ""))
-    x <- df$temp_c; LSL <- input$lsl; USL <- input$usl; med <- median(x, na.rm=TRUE)
+    x <- df$temp_c
+    LSL <- input$lsl; USL <- input$usl; med <- median(x, na.rm=TRUE)
     m <- mean(x); s <- sd(x)
+    
     ggplot(data.frame(x=x), aes(x)) +
       geom_histogram(aes(y=..density..), bins=30, alpha=0.7) +
       { if (is.finite(s) && s>0) stat_function(fun = dnorm, args = list(mean=m, sd=s), linewidth=1.1) } +
@@ -206,7 +229,7 @@ server <- function(input, output, session){
       theme_minimal(base_size = 12)
   })
   
-  # Capability cards
+  # Capability metrics for current selection
   output$caps <- renderUI({
     df <- dv(); validate(need(nrow(df)>0, NULL))
     c <- capability(df$temp_c, input$lsl, input$usl)
