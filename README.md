@@ -2,7 +2,9 @@
 
 
 
-## This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows.The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
+## This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows. 
+
+## The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
 
 ## Specifically, the system answers two key questions:
 
@@ -34,25 +36,25 @@ Brandy, Juan, Adele, Michael
 
 The dashboard provides both high-level system views and component-level diagnostics, including a sidebar that displays:
 
-## Number of rooms
+ - Number of rooms
 
-## Number of racks
+-  Number of racks
 
-## Number of servers
+-  Number of servers
 
-## Number of GPUs per server
+-  Number of GPUs per server
 
-## Number of CPUs per server
+-  Number of CPUs per server
 
 
-These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
+## These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
 
 
 ## Dataset Structures
 
 The first and largest dataset that we developed was the (dataset.csv). Each row represents a single processing asset—GPU or CPU—along with its physical and environmental context. The structure is designed for clarity and traceability, allowing us to move fluidly between system-wide behavior and individual component performance.
 
-## By linking every asset to its server, rack, and room, this dataset enables hierarchical analysis that connects local events (like a GPU overheating) to broader operational trends across the data center.
+ By linking every asset to its server, rack, and room, this dataset enables hierarchical analysis that connects local events (like a GPU overheating) to broader operational trends across the data center.
 
 
 | Column         | Description                                                                                    |
@@ -94,7 +96,7 @@ The structure mirrors the broader system hierarchy but simplifies it to the vari
 
 This structure allows for precise time-series tracking of each GPU, making it straightforward to visualize process trends, calculate control limits, and evaluate how performance shifts across time or environmental changes.
 
-## crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
+ crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
 
 
 It’s designed to simulate unexpected operating conditions—rapid temperature spikes, inconsistent readings, or correlated rack-level faults—and is essential for validating that the dashboard’s control limits and sigma thresholds perform as intended.
@@ -130,10 +132,10 @@ By modeling data at all three scales, the system can detect deviations early, tr
 
 This layered approach ensures:
 
-## Traceability: Every data point can be connected from component to environment.
+- Traceability: Every data point can be connected from component to environment.
 
-## Scalability:  Models can expand to include additional sensors or performance metrics.
+- Scalability:  Models can expand to include additional sensors or performance metrics.
 
-## Validation:   System response can be tested against synthetic or real-world anomalies.
+-  Validation:   System response can be tested against synthetic or real-world anomalies.
 
-# In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
+ In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
