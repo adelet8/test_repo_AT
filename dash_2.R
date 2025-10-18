@@ -1,7 +1,8 @@
-# app.R — SPC Dashboard (GPU-only, ±3σ control limits, Hierarchy Drilldown)
+# app.R — SPC Dashboard (±3σ control limits, Hierarchy Drilldown)
 # Thin dataset expected columns:
-# ts, asset_id, asset_type, server_id, rack_id, room_id,
+# ts, asset_id, server_id, rack_id, room_id,
 # asset_temp_inlet_c, rack_inlet_c, room_temp_c, server_temp_c
+# (asset_type is optional; if present and == "GPU", we filter to GPUs)
 
 library(shiny)
 library(shinydashboard)
@@ -20,7 +21,7 @@ set_theme()  # from SPC.R
 num <- function(x) suppressWarnings(as.numeric(x))
 
 REQ_COLS <- c(
-  "ts","asset_id","asset_type","server_id","rack_id","room_id",
+  "ts","asset_id","server_id","rack_id","room_id",
   "asset_temp_inlet_c","rack_inlet_c","room_temp_c","server_temp_c"
 )
 
@@ -47,7 +48,6 @@ spec_metrics <- function(x, LSL, USL){
 
 # ---- Treemap hierarchy builder (Rack -> Server -> Asset) ----
 build_treemap_df <- function(df){
-  # df already filtered to GPUs in dv()
   racks   <- df %>% count(rack_id, name="n")
   servers <- df %>% count(rack_id, server_id, name="n")
   assets  <- df %>% count(rack_id, server_id, asset_id, name="n")
@@ -78,8 +78,8 @@ asset_xbar_s_window_local <- function(df, asset_id, metric_col, m = 5, show_labe
 # ---------- Data prep ----------
 load_initial <- function(){
   cand <- c(
-    "datacenter_assets_timeseries_8h_GPU_DC-Room-1_THIN_SIM.csv",
-    "datacenter_assets_thin_8h.csv"
+    "nothing.csv",
+    "noting2.csv"
   )
   f <- cand[file.exists(cand)]
   if (length(f)) readr::read_csv(f[1], show_col_types = FALSE) else NULL
@@ -96,34 +96,39 @@ prep_base <- function(df){
     df <- df %>% mutate(t_idx = as.integer(sub("^t_", "", ts)))
   }
   # Force types
-  df %>%
+  df <- df %>%
     mutate(
       rack_id   = as.character(rack_id),
       server_id = as.character(server_id),
       asset_id  = as.character(asset_id),
-      asset_type = as.character(asset_type),
       asset_temp_inlet_c = num(asset_temp_inlet_c),
       rack_inlet_c       = num(rack_inlet_c),
       room_temp_c        = num(room_temp_c),
       server_temp_c      = num(server_temp_c)
     )
+  # Optional column: asset_type
+  if ("asset_type" %in% names(df)) {
+    df <- df %>% mutate(asset_type = as.character(asset_type))
+  }
+  df
 }
 
 # ---------- UI ----------
 ui <- dashboardPage(
-  dashboardHeader(title = "Datacenter SPC — GPU Only"),
+  dashboardHeader(title = "Datacenter SPC"),
   dashboardSidebar(
     sidebarMenu(menuItem("SPC", tabName = "spc", icon = icon("chart-line"))),
     hr(),
     fileInput("csv", "Upload CSV", accept = ".csv"),
     checkboxInput("show_labels", "Show SPC captions/labels", TRUE),
     hr(),
-    # NEW: Specs UI (optional overlays)
+    # Specs UI (optional overlays) — ranges will be overridden by control-limit observer
     checkboxInput("show_specs", "Show specification limits (LSL/USL)", FALSE),
-    sliderInput("lsl", "Lower Spec Limit (°C)", min = 18, max = 28, value = 22, step = 0.1),
-    sliderInput("usl", "Upper Spec Limit (°C)", min = 24, max = 34, value = 30, step = 0.1),
+    sliderInput("lsl", "Lower Spec Limit (°C)", min = 18, max = 28, value = 22, step = 0.01),
+    sliderInput("usl", "Upper Spec Limit (°C)", min = 24, max = 34, value = 30, step = 0.01),
     hr(),
-    helpText("Click treemap to drill Rack → Server → Asset. Control limits = mean ± 3σ.")
+    helpText("Click treemap to drill Rack → Server → Asset. Control limits = mean ± 3σ."),
+    helpText("If asset_type=='GPU' exists, data is filtered to GPUs; otherwise all rows are used.")
   ),
   dashboardBody(
     tabItems(
@@ -136,7 +141,7 @@ ui <- dashboardPage(
                                          choices = c("rack_inlet_c","server_temp_c","asset_temp_inlet_c","room_temp_c"),
                                          selected = "rack_inlet_c")
                       ),
-                      column(4, helpText("Dataset must contain only GPU assets or will be filtered to GPUs.")),
+                      column(4, helpText("Dataset filtered to GPUs only if asset_type column exists.")),
                       column(4, helpText("Spec sliders affect Cp/Cpk overlays only; control limits remain μ ± 3σ."))
                     )
                 )
@@ -212,9 +217,12 @@ server <- function(input, output, session){
     )
   })
   
-  # Filtered view: GPU-only + current selection
+  # Filtered view: conditional GPU filter + current selection
   dv <- reactive({
-    df <- base() %>% filter(asset_type == "GPU")
+    df <- base()
+    if ("asset_type" %in% names(df)) {
+      df <- df %>% dplyr::filter(asset_type == "GPU")
+    }
     s <- sel()
     if (!is.null(s$rack))   df <- df %>% filter(rack_id   == s$rack)
     if (!is.null(s$server)) df <- df %>% filter(server_id == s$server)
@@ -222,10 +230,39 @@ server <- function(input, output, session){
     df
   })
   
-  # Treemap (GPU-only)
+  # Dynamically clamp spec slider ranges to current control limits of the selected metric
+  observe({
+    req(input$metric)
+    df <- dv(); req(nrow(df) > 0)
+    x  <- df[[input$metric]]
+    cl <- ctrl_limits(x)
+    
+    updateSliderInput(session, "lsl",
+                      min = cl$LCL,
+                      max = cl$UCL,
+                      value = {
+                        v <- input$lsl %||% cl$LCL
+                        v <- max(v, cl$LCL)  # ≥ LCL
+                        v <- min(v, cl$UCL)  # ≤ UCL
+                        v
+                      }
+    )
+    updateSliderInput(session, "usl",
+                      min = cl$LCL,
+                      max = cl$UCL,
+                      value = {
+                        v <- input$usl %||% cl$UCL
+                        v <- max(v, cl$LCL)  # ≥ LCL
+                        v <- min(v, cl$UCL)  # ≤ UCL
+                        v
+                      }
+    )
+  })
+  
+  # Treemap
   output$tree <- renderPlotly({
     df <- dv()
-    validate(need(nrow(df)>0, "No GPU data."))
+    validate(need(nrow(df)>0, "No data to display."))
     tdf <- build_treemap_df(df)
     
     plot_ly(
@@ -335,7 +372,7 @@ server <- function(input, output, session){
     specs_row <- if (isTRUE(input$show_specs)) {
       sm <- spec_metrics(x, input$lsl, input$usl)
       fluidRow(
-        column(4, strong("LSL / USL"), br(), span(paste0(input$lsl, " / ", input$usl))),
+        column(4, strong("LSL / USL"), br(), span(paste0(signif(input$lsl,4), " / ", signif(input$usl,4)))),
         column(4, strong("Cp / Cpk"), br(), span(
           paste0(ifelse(is.na(sm$Cp),"NA", round(sm$Cp,3)),
                  " / ",
@@ -361,7 +398,7 @@ server <- function(input, output, session){
   
   # -------- SPC panel (uses SPC.R) --------
   output$spc_picker <- renderUI({
-    df <- dv(); req(nrow(df) > 0)  # already GPU-only
+    df <- dv(); req(nrow(df) > 0)
     sc <- input$spc_scope %||% "Rack (Xbar–S)"
     if (sc == "Room (Xbar–S)") {
       selectInput("spc_room_id", "Room", choices = sort(unique(df$room_id)),
