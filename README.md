@@ -1,6 +1,10 @@
-# This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows.The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
+# Prompt: Analysis GPU Failure Rates within Data Centers 
 
-# Specifically, the system answers two key questions:
+
+
+## This project analyzes GPU failure rates across distributed data centers to improve uptime and energy efficiency. It integrates R-based SPC models and real-time monitoring dashboards for predictive maintenance. It integrates R-based Statistical Process Control (SPC) models with real-time monitoring dashboards to support predictive maintenance workflows.The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
+
+## Specifically, the system answers two key questions:
 
 
 a) When and where are GPU failures occurring within the data center?
@@ -9,7 +13,7 @@ a) When and where are GPU failures occurring within the data center?
 b) How can temperature and variance thresholds be adjusted to fit user-defined preferences?
 
 
-# The project uses three datasets to model statistical process control (SPC) across data center components:
+## The project uses three datasets to model statistical process control (SPC) across data center components:
 
 dataset.csv - system-level data capturing room, rack, and server temperature behavior. Used for baseline process control and hierarchical SPC models.
 
@@ -17,36 +21,38 @@ gpu_data(1).csv — component-level GPU telemetry for monitoring process varianc
 
 crazy_data.csv — synthetic anomaly dataset used to validate SPC detection thresholds and identify instability under stress conditions.
 
-# Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
+## Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
 
-# TEAM
+
+##TEAM
 
 Brandy, Juan, Adele, Michael 
+
 
 
 # The Dashboard
 
 The dashboard provides both high-level system views and component-level diagnostics, including a sidebar that displays:
 
-# Number of rooms
+## Number of rooms
 
-# Number of racks
+## Number of racks
 
-# Number of servers
+## Number of servers
 
-# Number of GPUs per server
+## Number of GPUs per server
 
-# Number of CPUs per server
+## Number of CPUs per server
 
 
 These metrics give an at-a-glance summary of infrastructure health while enabling users to drill down into any rack or GPU for detailed SPC visualization.
 
 
-# Dataset Structures
+## Dataset Structures
 
 The first and largest dataset that we developed was the (dataset.csv). Each row represents a single processing asset—GPU or CPU—along with its physical and environmental context. The structure is designed for clarity and traceability, allowing us to move fluidly between system-wide behavior and individual component performance.
 
-# By linking every asset to its server, rack, and room, this dataset enables hierarchical analysis that connects local events (like a GPU overheating) to broader operational trends across the data center.
+## By linking every asset to its server, rack, and room, this dataset enables hierarchical analysis that connects local events (like a GPU overheating) to broader operational trends across the data center.
 
 
 | Column         | Description                                                                                    |
@@ -62,7 +68,7 @@ The first and largest dataset that we developed was the (dataset.csv). Each row 
 | `status`       | Operational state of the asset: `OK`, `WARN`, or `FAIL`.                                       |
 
 
-#  GPU data
+##  GPU data
 
 gpu_data(1).csv focuses specifically on GPU-level performance and thermal metrics.
 While dataset.csv provides the larger system context, this file isolates the behavior of GPUs themselves — allowing for finer control, variance tracking, and process stability analysis.
@@ -88,7 +94,7 @@ The structure mirrors the broader system hierarchy but simplifies it to the vari
 
 This structure allows for precise time-series tracking of each GPU, making it straightforward to visualize process trends, calculate control limits, and evaluate how performance shifts across time or environmental changes.
 
-# crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
+## crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
 
 
 It’s designed to simulate unexpected operating conditions—rapid temperature spikes, inconsistent readings, or correlated rack-level faults—and is essential for validating that the dashboard’s control limits and sigma thresholds perform as intended.
@@ -114,20 +120,20 @@ Each serves a distinct purpose within the SPC workflow, moving from macro-level 
 This structure mirrors the way a real data center operates: stable at the top level, variable at the component level, and unpredictable under failure or stress.
 By modeling data at all three scales, the system can detect deviations early, trace their origin, and validate its own reliability under extreme conditions.
 
-# | Level                 | Dataset           | Focus                     | Example Use                                                                                     |
+ | Level                 | Dataset           | Focus                     | Example Use                                                                                     |
 | --------------------- | ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
 | **System-Level**      | `dataset.csv`     | Rooms, racks, and servers | Analyze average rack temperatures or environmental drift across multiple rooms.                 |
 | **Component-Level**   | `gpu_data(1).csv` | Individual GPUs           | Track process variation, temperature stability, and sigma-short behavior for each GPU.          |
 | **Stress-Test Level** | `crazy_data.csv`  | Simulated anomalies       | Test alert thresholds and control limits under extreme temperature or performance fluctuations. |
 
-# Why It Works
+## Why It Works
 
 This layered approach ensures:
 
-# Traceability: Every data point can be connected from component to environment.
+## Traceability: Every data point can be connected from component to environment.
 
-# Scalability:  Models can expand to include additional sensors or performance metrics.
+## Scalability:  Models can expand to include additional sensors or performance metrics.
 
-# Validation:   System response can be tested against synthetic or real-world anomalies.
+## Validation:   System response can be tested against synthetic or real-world anomalies.
 
 # In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
