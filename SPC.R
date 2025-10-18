@@ -1,17 +1,17 @@
 # =======================================================================
-# Statistical Process Control (SPC) Toolkit for Datacenter Timeseries
-# Works with long data containing:
-# ts, t_idx, asset_id, asset_type, server_id, rack_id, room_id,
-# numeric metrics (e.g., asset_power_w, rack_inlet_c, server_temp_c, ...)
+# SPC.R — Statistical Process Control (SPC) Toolkit for Datacenter Timeseries
+# Works with long data containing at least:
+# ts, asset_id, asset_type, server_id, rack_id, room_id,
+# asset_temp_inlet_c, rack_inlet_c, room_temp_c, server_temp_c
+# Optional: t_idx (integer time index). If missing, it's derived from ts.
 # =======================================================================
 
 # ---- Libraries --------------------------------------------------------
 library(dplyr)
-library(readr)
 library(ggplot2)
 library(ggpubr)
-library(moments)
 library(tidyr)
+library(moments)
 
 # ---- Theme ------------------------------------------------------------
 set_theme <- function(){
@@ -30,14 +30,23 @@ set_theme <- function(){
   )
 }
 
-# ---- Descriptive helper ----------------------------------------------
+# ---- Helpers ----------------------------------------------------------
+# Ensure we have an integer time index (t_idx). If absent, derive from ts "t_###".
+ensure_t_idx <- function(df){
+  if (!"t_idx" %in% names(df)) {
+    stopifnot("ts" %in% names(df))
+    df <- df %>% mutate(t_idx = as.integer(sub("^t_", "", .data$ts)))
+  }
+  df
+}
+
 describe <- function(x){
   tibble(x) %>%
     summarize(
       mean = mean(x, na.rm = TRUE),
       sd   = sd(x, na.rm = TRUE),
-      skew = skewness(x, na.rm = TRUE),
-      kurtosis = kurtosis(x, na.rm = TRUE)
+      skew = moments::skewness(x, na.rm = TRUE),
+      kurtosis = moments::kurtosis(x, na.rm = TRUE)
     ) %>%
     mutate(
       caption = paste0(
@@ -49,26 +58,29 @@ describe <- function(x){
     )
 }
 
-# ---- Subgroup statistics ---------------------------------------------
-get_stat_s <- function(x,y){
-  data <- tibble(x=x,y=y)
-  sigma_t <- sd(y, na.rm = TRUE)
-  
-  output <- data %>%
+# Safe subgroup summarizer (handles NA/Inf and variable subgroup sizes)
+.get_subgroup_stats <- function(x, y) {
+  tibble(x = x, y = y) %>%
     group_by(x) %>%
-    summarize(
-      xbar = mean(y, na.rm = TRUE),
-      r    = diff(range(y, na.rm = TRUE)),
-      s    = sd(y, na.rm = TRUE),
-      nw   = sum(!is.na(y)),
+    summarise(
+      n_valid = sum(is.finite(y)),
+      xbar = ifelse(n_valid > 0, mean(y[is.finite(y)], na.rm = TRUE), NA_real_),
+      r    = ifelse(n_valid > 0, diff(range(y[is.finite(y)], na.rm = TRUE)), NA_real_),
+      s    = ifelse(n_valid > 1, sd(y[is.finite(y)], na.rm = TRUE), NA_real_),
+      nw   = n_valid,
       df   = pmax(nw - 1, 0),
       .groups = "drop"
     )
-  
-  output %>%
+}
+
+# ---- Subgroup/Total stats --------------------------------------------
+get_stat_s <- function(x,y){
+  stat <- .get_subgroup_stats(x, y)
+  sigma_t <- sd(y, na.rm = TRUE)
+  stat %>%
     mutate(
       xbbar   = mean(xbar, na.rm = TRUE),
-      sigma_s = sqrt(sum(df * s^2, na.rm = TRUE) / sum(df, na.rm = TRUE)), # pooled within
+      sigma_s = sqrt(sum(df * s^2, na.rm = TRUE) / pmax(sum(df, na.rm = TRUE), 1)),
       sigma_t = sigma_t,
       se      = sigma_s / sqrt(pmax(nw, 1)),
       upper   = xbbar + 3*se,
@@ -77,37 +89,25 @@ get_stat_s <- function(x,y){
 }
 
 get_stat_t <- function(x,y){
-  data <- tibble(x=x,y=y)
+  stat <- .get_subgroup_stats(x, y)
   sigma_t <- sd(y, na.rm = TRUE)
-  
-  stat_s <- data %>%
-    group_by(x) %>%
-    summarize(
-      xbar = mean(y, na.rm = TRUE),
-      r    = diff(range(y, na.rm = TRUE)),
-      s    = sd(y, na.rm = TRUE),
-      nw   = sum(!is.na(y)),
-      df   = pmax(nw - 1, 0),
-      .groups = "drop"
-    )
-  
-  stat_s %>%
+  stat %>%
     summarize(
       xbbar   = mean(xbar, na.rm = TRUE),
       rbar    = mean(r,    na.rm = TRUE),
       sbar    = mean(s,    na.rm = TRUE),
-      sigma_s = sqrt(sum(df * s^2, na.rm = TRUE) / sum(df, na.rm = TRUE)),  # pooled
+      sigma_s = sqrt(sum(df * s^2, na.rm = TRUE) / pmax(sum(df, na.rm = TRUE), 1)),
       sigma_t = sigma_t,
       n       = sum(nw, na.rm = TRUE)
     )
 }
 
-# ---- Control constants via simulation --------------------------------
+# ---- Control constants via simulation (pooled across reps) -----------
 dn <- function(n = 12, reps = 1e4){
   tibble(rep = 1:reps) %>%
     group_by(rep) %>%
-    summarize(r = abs(diff(range(rnorm(n, 0, 1)))), .groups="drop") %>%
-    summarize(
+    summarise(r = abs(diff(range(rnorm(n, 0, 1)))), .groups = "drop") %>%
+    summarise(
       d2 = mean(r),
       d3 = sd(r),
       D3 = pmax(0, 1 - 3*(d3/d2)),
@@ -118,8 +118,8 @@ dn <- function(n = 12, reps = 1e4){
 bn <- function(n, reps = 1e4){
   tibble(rep = 1:reps) %>%
     group_by(rep) %>%
-    summarize(s = sd(rnorm(n, 0, 1)), .groups = "drop") %>%
-    summarize(
+    summarise(s = sd(rnorm(n, 0, 1)), .groups = "drop") %>%
+    summarise(
       b2 = mean(s),
       b3 = sd(s),
       C4 = b2,
@@ -131,31 +131,20 @@ bn <- function(n, reps = 1e4){
 
 # ---- Limits (Xbar, S, R, MR) -----------------------------------------
 limits_avg <- function(x,y){
-  data <- tibble(x=x,y=y)
-  
-  stat_s <- data %>%
-    group_by(x) %>%
-    summarize(
-      xbar = mean(y, na.rm = TRUE),
-      s    = sd(y, na.rm = TRUE),
-      nw   = sum(!is.na(y)),
-      df   = pmax(nw - 1, 0),
-      .groups="drop"
-    ) %>%
-    filter(nw >= 2)  # Xbar-S needs >=2 per subgroup
-  
+  stat_s <- .get_subgroup_stats(x, y) %>% filter(nw >= 2)
+  if (nrow(stat_s) == 0)
+    return(stat_s %>% mutate(lower = NA_real_, upper = NA_real_, sbar = NA_real_, xbbar = NA_real_))
   constants <- stat_s %>%
     distinct(nw) %>%
     rowwise() %>%
-    mutate(const = list(bn(n = nw, reps = 1e4))) %>%
-    unnest(const) %>%
+    mutate(tmp = list(bn(n = nw, reps = 1e4))) %>%
+    unnest_wider(tmp) %>%
     ungroup() %>%
     select(nw, A3)
-  
   stat_s %>%
     left_join(constants, by = "nw") %>%
     mutate(
-      sbar  = sqrt(sum(df * s^2, na.rm=TRUE) / sum(df, na.rm=TRUE)),
+      sbar  = sqrt(sum(df * s^2, na.rm=TRUE) / pmax(sum(df, na.rm=TRUE), 1)),
       xbbar = mean(xbar, na.rm=TRUE),
       lower = xbbar - A3 * sbar,
       upper = xbbar + A3 * sbar
@@ -163,26 +152,16 @@ limits_avg <- function(x,y){
 }
 
 limits_s <- function(x,y){
-  data <- tibble(x=x,y=y)
-  
-  stat_s <- data %>%
-    group_by(x) %>%
-    summarize(
-      s  = sd(y, na.rm = TRUE),
-      nw = sum(!is.na(y)),
-      df = pmax(nw - 1, 0),
-      .groups="drop"
-    ) %>%
-    filter(nw >= 2)
-  
+  stat_s <- .get_subgroup_stats(x, y) %>% filter(nw >= 2)
+  if (nrow(stat_s) == 0)
+    return(stat_s %>% mutate(lower = NA_real_, upper = NA_real_, sbar = NA_real_))
   constants <- stat_s %>%
     distinct(nw) %>%
     rowwise() %>%
-    mutate(const = list(bn(n = nw, reps = 1e4))) %>%
-    unnest(const) %>%
+    mutate(tmp = list(bn(n = nw, reps = 1e4))) %>%
+    unnest_wider(tmp) %>%
     ungroup() %>%
     select(nw, B3, B4)
-  
   stat_s %>%
     left_join(constants, by = "nw") %>%
     mutate(
@@ -193,26 +172,16 @@ limits_s <- function(x,y){
 }
 
 limits_r <- function(x,y){
-  data <- tibble(x=x,y=y)
-  
-  stat_s <- data %>%
-    group_by(x) %>%
-    summarize(
-      r  = diff(range(y, na.rm = TRUE)),
-      nw = sum(!is.na(y)),
-      df = pmax(nw - 1, 0),
-      .groups="drop"
-    ) %>%
-    filter(nw >= 2)
-  
+  stat_s <- .get_subgroup_stats(x, y) %>% filter(nw >= 2)
+  if (nrow(stat_s) == 0)
+    return(stat_s %>% mutate(lower = NA_real_, upper = NA_real_, rbar = NA_real_))
   constants <- stat_s %>%
     distinct(nw) %>%
     rowwise() %>%
-    mutate(const = list(dn(n = nw, reps = 1e4))) %>%
-    unnest(const) %>%
+    mutate(tmp = list(dn(n = nw, reps = 1e4))) %>%
+    unnest_wider(tmp) %>%
     ungroup() %>%
     select(nw, D3, D4)
-  
   stat_s %>%
     left_join(constants, by = "nw") %>%
     mutate(
@@ -227,7 +196,6 @@ limits_mr <- function(x,y){
   data  <- tibble(x=x,y=y)
   data2 <- data %>% reframe(x = x[-1], mr = abs(diff(y)))
   mrbar <- mean(data2$mr, na.rm = TRUE)
-  
   tibble(
     x     = data2$x,
     mr    = data2$mr,
@@ -237,124 +205,99 @@ limits_mr <- function(x,y){
   )
 }
 
+# ---- Plot guards ------------------------------------------------------
+.ggx_empty <- function(msg = "No subgroups with ≥ 2 valid points"){
+  ggplot() + annotate("text", x = 0, y = 0, label = msg) + theme_void(base_size = 14)
+}
+
 # ---- Plots (Xbar, S, R, MR) ------------------------------------------
-ggxbar <- function(x,y, xlab = "Time (Subgroups)", ylab = "Average", show_labels = TRUE){
-  data   <- tibble(x=x, y=y)
-  stat_s <- get_stat_s(x = data$x, y = data$y)
-  stat_t <- get_stat_t(x = x, y = y)
+ggxbar <- function(x,y, xlab = "Subgroup", ylab = "Average", show_labels = TRUE){
+  stat_s <- get_stat_s(x, y)
+  stat_t <- get_stat_t(x, y)
+  lims   <- limits_avg(x, y)
+  if (nrow(lims) == 0 || all(!is.finite(lims$upper))) return(.ggx_empty())
   
-  labels <- stat_s %>%
-    reframe(
-      x    = c(max(x, na.rm=TRUE), max(x, na.rm=TRUE), max(x, na.rm=TRUE)),
-      type = c("xbbar", "upper", "lower"),
-      name = c("xbbar", "+3 s", "-3 s"),
-      value= c(mean(xbbar, na.rm=TRUE), max(upper, na.rm=TRUE), min(lower, na.rm=TRUE))
-    ) %>%
-    mutate(value = round(value, 2),
-           text  = paste0(name, " = ", value))
+  labels <- tibble(
+    x    = max(lims$x, na.rm = TRUE),
+    xb   = mean(lims$xbbar, na.rm = TRUE),
+    up   = max(lims$upper,  na.rm = TRUE),
+    lo   = min(lims$lower,  na.rm = TRUE)
+  ) %>% pivot_longer(c(xb, up, lo), names_to = "name", values_to = "value")
   
   gg <- ggplot() +
     geom_hline(data = stat_t, aes(yintercept = xbbar), color = "lightgrey") +
-    geom_ribbon(data = stat_s, aes(x = x, ymin = lower, ymax = upper),
+    geom_ribbon(data = lims, aes(x = x, ymin = lower, ymax = upper),
                 fill = "steelblue", alpha = 0.2) +
     geom_line(data = stat_s, aes(x = x, y = xbar), linewidth = 0.5) +
     geom_point(data = stat_s, aes(x = x, y = xbar), size = 2) +
     labs(x = xlab, y = ylab, subtitle = "Average Chart")
-  
   if (isTRUE(show_labels)) {
-    gg <- gg + geom_label(data = labels, aes(x = x, y = value, label = text),
-                          hjust = 1, alpha = 0.5)
+    labmap <- c(xb = "xbbar", up = "+3 s", lo = "-3 s")
+    gg <- gg + geom_label(
+      data = labels,
+      aes(x = x, y = value, label = paste0(labmap[name], " = ", round(value,2))),
+      hjust = 1, alpha = 0.5
+    )
   }
   gg
 }
 
-ggs <- function(x,y, xlab = "Time (Subgroups)", ylab = "Standard Deviation", show_labels = TRUE){
-  data   <- tibble(x=x, y=y)
-  stat_s <- limits_s(x = data$x, y = data$y)
-  stat_t <- get_stat_t(x = x, y = y)
+ggs <- function(x,y, xlab = "Subgroup", ylab = "Standard Deviation", show_labels = TRUE){
+  lims <- limits_s(x, y)
+  stat <- .get_subgroup_stats(x, y)
+  if (nrow(lims) == 0 || all(!is.finite(lims$upper))) return(.ggx_empty())
   
-  labels <- stat_s %>%
-    reframe(
-      x    = c(max(x, na.rm=TRUE), max(x, na.rm=TRUE), max(x, na.rm=TRUE)),
-      type = c("sbar", "upper", "lower"),
-      name = c("sbar", "+3 s", "-3 s"),
-      value= c(mean(sbar, na.rm=TRUE), max(upper, na.rm=TRUE), min(lower, na.rm=TRUE))
-    ) %>%
-    mutate(value = round(value, 2),
-           text  = paste0(name, " = ", value))
+  labels <- tibble(
+    x    = max(lims$x, na.rm = TRUE),
+    sb   = mean(lims$sbar, na.rm = TRUE),
+    up   = max(lims$upper,  na.rm = TRUE),
+    lo   = min(lims$lower,  na.rm = TRUE)
+  ) %>% pivot_longer(c(sb, up, lo), names_to = "name", values_to = "value")
   
   gg <- ggplot() +
-    geom_hline(data = stat_t, aes(yintercept = sbar), color = "lightgrey") +
-    geom_ribbon(data = stat_s, aes(x = x, ymin = lower, ymax = upper),
+    geom_hline(yintercept = mean(lims$sbar, na.rm = TRUE), color = "lightgrey") +
+    geom_ribbon(data = lims, aes(x = x, ymin = lower, ymax = upper),
                 fill = "steelblue", alpha = 0.2) +
-    geom_line(data = stat_s, aes(x = x, y = s), linewidth = 0.5) +
-    geom_point(data = stat_s, aes(x = x, y = s), size = 3) +
+    geom_line(data = stat, aes(x = x, y = s), linewidth = 0.5) +
+    geom_point(data = stat, aes(x = x, y = s), size = 3) +
     labs(x = xlab, y = ylab, subtitle = "Standard Deviation Chart")
-  
   if (isTRUE(show_labels)) {
-    gg <- gg + geom_label(data = labels, aes(x = x, y = value, label = text),
-                          hjust = 1, alpha = 0.5)
+    labmap <- c(sb = "sbar", up = "+3 s", lo = "-3 s")
+    gg <- gg + geom_label(
+      data = labels,
+      aes(x = x, y = value, label = paste0(labmap[name], " = ", round(value,2))),
+      hjust = 1, alpha = 0.5
+    )
   }
   gg
 }
 
-ggr <- function(x,y, xlab = "Time (Subgroups)", ylab = "Range", show_labels = TRUE){
-  data   <- tibble(x=x, y=y)
-  stat_s <- limits_r(x = data$x, y = data$y)
-  stat_t <- get_stat_t(x = x, y = y)
+ggr <- function(x,y, xlab = "Subgroup", ylab = "Range", show_labels = TRUE){
+  lims <- limits_r(x, y)
+  stat <- .get_subgroup_stats(x, y)
+  if (nrow(lims) == 0 || all(!is.finite(lims$upper))) return(.ggx_empty())
   
-  labels <- stat_s %>%
-    reframe(
-      x    = c(max(x, na.rm=TRUE), max(x, na.rm=TRUE), max(x, na.rm=TRUE)),
-      type = c("rbar", "upper", "lower"),
-      name = c("rbar", "+3 s", "-3 s"),
-      value= c(mean(rbar, na.rm=TRUE), max(upper, na.rm=TRUE), min(lower, na.rm=TRUE))
-    ) %>%
-    mutate(value = round(value, 2),
-           text  = paste0(name, " = ", value))
+  labels <- tibble(
+    x    = max(lims$x, na.rm = TRUE),
+    rb   = mean(lims$rbar, na.rm = TRUE),
+    up   = max(lims$upper,  na.rm = TRUE),
+    lo   = min(lims$lower,  na.rm = TRUE)
+  ) %>% pivot_longer(c(rb, up, lo), names_to = "name", values_to = "value")
   
   gg <- ggplot() +
-    geom_hline(data = stat_t, aes(yintercept = rbar), color = "lightgrey") +
-    geom_ribbon(data = stat_s, aes(x = x, ymin = lower, ymax = upper),
+    geom_hline(yintercept = mean(lims$rbar, na.rm = TRUE), color = "lightgrey") +
+    geom_ribbon(data = lims, aes(x = x, ymin = lower, ymax = upper),
                 fill = "steelblue", alpha = 0.2) +
-    geom_line(data = stat_s, aes(x = x, y = r), linewidth = 1) +
-    geom_point(data = stat_s, aes(x = x, y = r), size = 5) +
+    geom_line(data = stat, aes(x = x, y = r), linewidth = 1) +
+    geom_point(data = stat, aes(x = x, y = r), size = 5) +
     labs(x = xlab, y = ylab, subtitle = "Range Chart")
-  
   if (isTRUE(show_labels)) {
-    gg <- gg + geom_label(data = labels, aes(x = x, y = value, label = text),
-                          hjust = 1)
-  }
-  gg
-}
-
-ggmr <- function(x,y, xlab = "Time (Subgroups)", ylab = "Moving Range", show_labels = TRUE){
-  data   <- tibble(x=x, y=y)
-  data2  <- data %>% reframe(x = x[-1], mr = abs(diff(y)))
-  stat_s <- limits_mr(x = data$x, y = data$y)
-  stat_t <- stat_s %>% summarize(mrbar = mean(mrbar, na.rm=TRUE))
-  
-  labels <- stat_s %>%
-    reframe(
-      x    = c(max(x, na.rm=TRUE), max(x, na.rm=TRUE), max(x, na.rm=TRUE)),
-      type = c("mrbar", "upper", "lower"),
-      name = c("mrbar", "+3 s", "-3 s"),
-      value= c(mean(mrbar, na.rm=TRUE), max(upper, na.rm=TRUE), min(lower, na.rm=TRUE))
-    ) %>%
-    mutate(value = round(value, 2),
-           text  = paste0(name, " = ", value))
-  
-  gg <- ggplot() +
-    geom_hline(data = stat_t, aes(yintercept = mrbar), color = "lightgrey") +
-    geom_ribbon(data = stat_s, aes(x = x, ymin = lower, ymax = upper),
-                fill = "steelblue", alpha = 0.2) +
-    geom_line(data = data2, aes(x = x, y = mr), linewidth = 1) +
-    geom_point(data = data2, aes(x = x, y = mr), size = 2) +
-    labs(x = xlab, y = ylab, subtitle = "Moving Range Chart")
-  
-  if (isTRUE(show_labels)) {
-    gg <- gg + geom_label(data = labels, aes(x = x, y = value, label = text),
-                          hjust = 1)
+    labmap <- c(rb = "rbar", up = "+3 s", lo = "-3 s")
+    gg <- gg + geom_label(
+      data = labels,
+      aes(x = x, y = value, label = paste0(labmap[name], " = ", round(value,2))),
+      hjust = 1
+    )
   }
   gg
 }
@@ -369,10 +312,7 @@ imr_stats <- function(metric_vec) {
   mrbar <- mean(mr, na.rm = TRUE)
   
   # MR(2) constants
-  d2 <- 1.128
-  D3 <- 0.000
-  D4 <- 3.267
-  
+  d2 <- 1.128; D3 <- 0.000; D4 <- 3.267
   sigma <- mrbar / d2
   xbar  <- mean(x, na.rm = TRUE)
   
@@ -423,13 +363,14 @@ ggi_mr_one <- function(df, metric_col, t_col = "t_idx",
   ggarrange(g_i, g_mr, ncol = 1, heights = c(2,1))
 }
 
-ggi_mr <- function(df, asset_id, metric_col = "asset_power_w", show_labels = TRUE) {
+ggi_mr <- function(df, asset_id, metric_col = "rack_inlet_c", show_labels = TRUE) {
   stopifnot(is.character(asset_id), length(asset_id) == 1)
   d <- df %>%
     filter(!is.na(.data$asset_id), .data$asset_id == asset_id) %>%
-    mutate(t_idx = if ("t_idx" %in% names(.)) t_idx else as.integer(sub("^t_", "", .data$ts))) %>%
+    ensure_t_idx() %>%
     arrange(t_idx)
   
+  # allow use standalone and inside shiny
   validate <- if (!requireNamespace("shiny", quietly = TRUE)) function(...) invisible(NULL) else shiny::validate
   need     <- if (!requireNamespace("shiny", quietly = TRUE)) function(...) TRUE else shiny::need
   validate(
@@ -443,10 +384,10 @@ ggi_mr <- function(df, asset_id, metric_col = "asset_power_w", show_labels = TRU
              show_labels = show_labels)
 }
 
-# ---- X̄–S convenience wrappers ---------------------------------------
-spc_xbar_s <- function(df, metric_col = "asset_power_w",
+# ---- X̄–S base and wrappers ------------------------------------------
+spc_xbar_s <- function(df, metric_col = "rack_inlet_c",
                        subgroup_col = "t_idx",
-                       xlab = "Minute (t)", ylab_mean = "Average", ylab_sd = "SD",
+                       xlab = "Subgroup", ylab_mean = "Average", ylab_sd = "SD",
                        show_labels = TRUE) {
   stopifnot(all(c(metric_col, subgroup_col) %in% names(df)))
   x <- df[[subgroup_col]]
@@ -461,23 +402,34 @@ spc_xbar_s <- function(df, metric_col = "asset_power_w",
   ggarrange(p_xbar, p_s, ncol = 1, heights = c(2,1))
 }
 
-spc_room <- function(df, room_id, metric_col = "asset_power_w", show_labels = TRUE) {
+# For single assets, create time-window subgroups so Xbar–S makes sense
+spc_asset_xbar_s_window <- function(df, asset_id, metric_col = "rack_inlet_c", m = 5){
+  d <- df %>%
+    filter(asset_id == !!asset_id) %>%
+    ensure_t_idx() %>%
+    arrange(t_idx) %>%
+    mutate(subgroup = floor((row_number() - 1L) / m))
+  spc_xbar_s(d, metric_col = metric_col, subgroup_col = "subgroup",
+             xlab = paste0("Subgroup (", m, " pts)"))
+}
+
+spc_room <- function(df, room_id, metric_col = "rack_inlet_c", show_labels = TRUE) {
   d <- df %>%
     filter(.data$room_id == room_id) %>%
-    mutate(t_idx = if ("t_idx" %in% names(.)) t_idx else as.integer(sub("^t_", "", .data$ts)))
+    ensure_t_idx()
   spc_xbar_s(d, metric_col = metric_col, show_labels = show_labels)
 }
 
-spc_rack <- function(df, rack_id, metric_col = "asset_power_w", show_labels = TRUE) {
+spc_rack <- function(df, rack_id, metric_col = "rack_inlet_c", show_labels = TRUE) {
   d <- df %>%
     filter(.data$rack_id == rack_id) %>%
-    mutate(t_idx = if ("t_idx" %in% names(.)) t_idx else as.integer(sub("^t_", "", .data$ts)))
+    ensure_t_idx()
   spc_xbar_s(d, metric_col = metric_col, show_labels = show_labels)
 }
 
-spc_server <- function(df, server_id, metric_col = "asset_power_w", show_labels = TRUE) {
+spc_server <- function(df, server_id, metric_col = "server_temp_c", show_labels = TRUE) {
   d <- df %>%
     filter(.data$server_id == server_id) %>%
-    mutate(t_idx = if ("t_idx" %in% names(.)) t_idx else as.integer(sub("^t_", "", .data$ts)))
+    ensure_t_idx()
   spc_xbar_s(d, metric_col = metric_col, show_labels = show_labels)
 }
