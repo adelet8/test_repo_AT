@@ -68,6 +68,50 @@ Each record captures temperature and status data at the component level, forming
 | `timestamp`  | Time of observation, typically formatted as a sequential index or datetime string.                                       |
 | `temp_c`     | Recorded GPU temperature (°C). Serves as the main metric for identifying process variation and potential failure events. |
 
+# Structure and Purpose
 
+This dataset is designed for localized statistical monitoring.By isolating GPU data, it allows analysts to evaluate short-term process variation (σ-short), identify control limit breaches, and detect early signs of degradation in individual components.
 
+The structure mirrors the broader system hierarchy but simplifies it to the variables most relevant to GPU performance. It’s intentionally compact — optimized for high-frequency sampling and SPC computation efficiency.
 
+This structure allows for precise time-series tracking of each GPU, making it straightforward to visualize process trends, calculate control limits, and evaluate how performance shifts across time or environmental changes.
+
+# crazy_data.csv is the dataset used for stress testing and anomaly detection.Unlike the other two datasets, this one intentionally includes irregular, unstable, or extreme values to test how well the SPC model responds when systems drift outside normal limits.
+
+It’s designed to simulate unexpected operating conditions—rapid temperature spikes, inconsistent readings, or correlated rack-level faults—and is essential for validating that the dashboard’s control limits and sigma thresholds perform as intended.
+
+| Column       | Description                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `timestamp`  | Sequential or datetime index marking each measurement event.                                                  |
+| `rack_id`    | Rack identifier showing where the anomaly occurred.                                                           |
+| `server_id`  | The server affected during the recorded event.                                                                |
+| `gpu_id`     | GPU identifier associated with the anomaly instance.                                                          |
+| `asset_type` | Classification of the component (`GPU`, sometimes `CPU`) for multi-component testing.                         |
+| `temp_c`     | Recorded temperature (°C) under simulated stress or outlier conditions.                                       |
+| `status`     | Observed system response (`OK`, `WARN`, `FAIL`), used to confirm correct alert behavior under extreme inputs. |
+
+# Dataset Relationship Overview
+
+The three datasets—dataset.csv, gpu_data(1).csv, and crazy_data.csv—are designed to work together as a hierarchical data system.
+Each serves a distinct purpose within the SPC workflow, moving from macro-level operational context to micro-level component behavior and finally to controlled anomaly testing.
+
+This structure mirrors the way a real data center operates: stable at the top level, variable at the component level, and unpredictable under failure or stress.
+By modeling data at all three scales, the system can detect deviations early, trace their origin, and validate its own reliability under extreme conditions.
+
+# | Level                 | Dataset           | Focus                     | Example Use                                                                                     |
+| --------------------- | ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| **System-Level**      | `dataset.csv`     | Rooms, racks, and servers | Analyze average rack temperatures or environmental drift across multiple rooms.                 |
+| **Component-Level**   | `gpu_data(1).csv` | Individual GPUs           | Track process variation, temperature stability, and sigma-short behavior for each GPU.          |
+| **Stress-Test Level** | `crazy_data.csv`  | Simulated anomalies       | Test alert thresholds and control limits under extreme temperature or performance fluctuations. |
+
+# Why It Works
+
+This layered approach ensures:
+
+# Traceability – every data point can be connected from component to environment.
+
+# Scalability – models can expand to include additional sensors or performance metrics.
+
+# Validation – system response can be tested against synthetic or real-world anomalies.
+
+In short, the dataset architecture is both practical and extensible — allowing engineers to evaluate, tune, and trust the SPC system before it’s deployed in live data center environments.
