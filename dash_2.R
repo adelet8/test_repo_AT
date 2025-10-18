@@ -33,6 +33,18 @@ ctrl_limits <- function(x){
   list(mean=m, sd=s, LCL=LCL, UCL=UCL, pct_out=pct_out)
 }
 
+# ---- Spec capability (optional overlay; DOES NOT affect control limits) ----
+spec_metrics <- function(x, LSL, USL){
+  x <- x[is.finite(x)]
+  m <- mean(x); s <- sd(x)
+  Cp  <- if (is.finite(s) && s>0) (USL - LSL)/(6*s) else NA_real_
+  Cpl <- if (is.finite(s) && s>0) (m - LSL)/(3*s)  else NA_real_
+  Cpu <- if (is.finite(s) && s>0) (USL - m)/(3*s)  else NA_real_
+  Cpk <- suppressWarnings(min(Cpl, Cpu))
+  pct_oos <- mean(x < LSL | x > USL) * 100
+  list(Cp=Cp, Cpk=Cpk, pct_oos=pct_oos)
+}
+
 # ---- Treemap hierarchy builder (Rack -> Server -> Asset) ----
 build_treemap_df <- function(df){
   # df already filtered to GPUs in dv()
@@ -106,6 +118,11 @@ ui <- dashboardPage(
     fileInput("csv", "Upload CSV", accept = ".csv"),
     checkboxInput("show_labels", "Show SPC captions/labels", TRUE),
     hr(),
+    # NEW: Specs UI (optional overlays)
+    checkboxInput("show_specs", "Show specification limits (LSL/USL)", FALSE),
+    sliderInput("lsl", "Lower Spec Limit (°C)", min = 18, max = 28, value = 22, step = 0.1),
+    sliderInput("usl", "Upper Spec Limit (°C)", min = 24, max = 34, value = 30, step = 0.1),
+    hr(),
     helpText("Click treemap to drill Rack → Server → Asset. Control limits = mean ± 3σ.")
   ),
   dashboardBody(
@@ -119,12 +136,8 @@ ui <- dashboardPage(
                                          choices = c("rack_inlet_c","server_temp_c","asset_temp_inlet_c","room_temp_c"),
                                          selected = "rack_inlet_c")
                       ),
-                      column(4,
-                             helpText("Dataset must contain only GPU assets or will be filtered to GPUs.")
-                      ),
-                      column(4,
-                             helpText("For per-asset SPC, switch to the panel below.")
-                      )
+                      column(4, helpText("Dataset must contain only GPU assets or will be filtered to GPUs.")),
+                      column(4, helpText("Spec sliders affect Cp/Cpk overlays only; control limits remain μ ± 3σ."))
                     )
                 )
               ),
@@ -143,7 +156,7 @@ ui <- dashboardPage(
                 box(width = 6, title = "Distribution (Histogram + Normal)", status = "primary", solidHeader = TRUE,
                     plotOutput("hist_plot", height = 320)
                 ),
-                box(width = 6, title = "Control-Limit Summary (±3σ)", status = "primary", solidHeader = TRUE,
+                box(width = 6, title = "Control & Capability Summary", status = "primary", solidHeader = TRUE,
                     uiOutput("caps")
                 )
               ),
@@ -167,10 +180,15 @@ ui <- dashboardPage(
 
 # ---------- Server ----------
 server <- function(input, output, session){
+  # Keep LSL < USL if user crosses them
+  observe({
+    if (isTRUE(input$show_specs) && !is.null(input$lsl) && !is.null(input$usl) && input$lsl >= input$usl) {
+      updateSliderInput(session, "usl", value = input$lsl + 0.1)
+    }
+  })
   
   # Uploaded file OR fallback
   current_df <- reactiveVal(load_initial())
-  
   observeEvent(input$csv, {
     req(input$csv$datapath)
     current_df(readr::read_csv(input$csv$datapath, show_col_types = FALSE))
@@ -264,12 +282,19 @@ server <- function(input, output, session){
     g <- ggplot(pdat, aes(t, y)) +
       geom_line() +
       geom_point(size=0.8, alpha=0.6) +
+      # Control limits (fixed at μ ± 3σ)
       geom_hline(yintercept = cl$LCL, linetype="dashed", color="#d62728") +
       geom_hline(yintercept = cl$UCL, linetype="dashed", color="#d62728") +
       geom_hline(yintercept = cl$mean, linetype="dotdash", color="#1f77b4") +
+      # OPTIONAL: Specification limits (do not affect control limits)
+      { if (isTRUE(input$show_specs)) geom_hline(yintercept = input$lsl, linetype="longdash") } +
+      { if (isTRUE(input$show_specs)) geom_hline(yintercept = input$usl, linetype="longdash") } +
       labs(x="t (minute index)", y="°C", title = title,
-           subtitle = paste0("μ=", round(cl$mean,2), "   σ=", round(cl$sd,2),
-                             "   LCL=", round(cl$LCL,2), "   UCL=", round(cl$UCL,2))) +
+           subtitle = paste0(
+             "μ=", round(cl$mean,2), "   σ=", round(cl$sd,2),
+             "   LCL=", round(cl$LCL,2), "   UCL=", round(cl$UCL,2),
+             if (isTRUE(input$show_specs)) paste0("   LSL/USL=", input$lsl, "/", input$usl) else ""
+           )) +
       theme_minimal(base_size = 12)
     
     ggplotly(g, tooltip = c("x","y"))
@@ -285,29 +310,52 @@ server <- function(input, output, session){
     ggplot(data.frame(x=x), aes(x)) +
       geom_histogram(aes(y=..density..), bins=30, alpha=0.7) +
       { if (is.finite(s) && s>0) stat_function(fun = dnorm, args = list(mean=m, sd=s), linewidth=1.1) } +
+      # Control limits
       geom_vline(xintercept = cl$LCL, linetype="dashed", color="#d62728") +
       geom_vline(xintercept = cl$UCL, linetype="dashed", color="#d62728") +
       geom_vline(xintercept = cl$mean, linetype="dotdash", color="#1f77b4") +
+      # OPTIONAL: spec limits
+      { if (isTRUE(input$show_specs)) geom_vline(xintercept = input$lsl, linetype="longdash") } +
+      { if (isTRUE(input$show_specs)) geom_vline(xintercept = input$usl, linetype="longdash") } +
       labs(x="°C", y="Density",
-           subtitle = paste0("μ=", round(m,2), ", σ=", round(s,2),
-                             " | LCL=", round(cl$LCL,2), ", UCL=", round(cl$UCL,2))) +
+           subtitle = paste0(
+             "μ=", round(m,2), ", σ=", round(s,2),
+             " | LCL=", round(cl$LCL,2), ", UCL=", round(cl$UCL,2),
+             if (isTRUE(input$show_specs)) paste0(" | LSL/USL=", input$lsl, "/", input$usl) else ""
+           )) +
       theme_minimal(base_size = 12)
   })
   
-  # Control-limit summary (±3σ)
+  # Control-limit & Capability summary
   output$caps <- renderUI({
     df <- dv(); validate(need(nrow(df)>0, NULL))
-    cl <- ctrl_limits(df[[req(input$metric)]])
+    x  <- df[[req(input$metric)]]
+    cl <- ctrl_limits(x)
+    
+    specs_row <- if (isTRUE(input$show_specs)) {
+      sm <- spec_metrics(x, input$lsl, input$usl)
+      fluidRow(
+        column(4, strong("LSL / USL"), br(), span(paste0(input$lsl, " / ", input$usl))),
+        column(4, strong("Cp / Cpk"), br(), span(
+          paste0(ifelse(is.na(sm$Cp),"NA", round(sm$Cp,3)),
+                 " / ",
+                 ifelse(is.na(sm$Cpk),"NA", round(sm$Cpk,3)))
+        )),
+        column(4, strong("% Out of Spec"), br(), span(paste0(round(sm$pct_oos,2),"%")))
+      )
+    } else NULL
+    
     tagList(
       fluidRow(
         column(3, strong("μ (mean)"), br(), span(round(cl$mean,3))),
         column(3, strong("σ (stdev)"), br(), span(round(cl$sd,3))),
-        column(3, strong("LCL / UCL"), br(), span(
+        column(3, strong("LCL / UCL (±3σ)"), br(), span(
           paste0(round(cl$LCL,2), " / ", round(cl$UCL,2)))
         ),
         column(3, strong("% beyond ±3σ"), br(), span(paste0(round(cl$pct_out,2),"%")))
       ),
-      tags$small("Control limits computed from current selection: mean ± 3σ.")
+      specs_row,
+      tags$small("Specs (if shown) reflect requirements; control limits reflect process stability.")
     )
   })
   
