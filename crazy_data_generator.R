@@ -3,9 +3,10 @@ library(tidyr)
 library(readr)
 library(lubridate)
 
+#same random results every time
 set.seed(42)
 
-# -------- knobs --------
+# set constants
 n_racks          <- 6
 servers_per_rack <- 5
 gpus_per_server  <- 3
@@ -18,55 +19,74 @@ start_date       <- as.Date("2025-01-01")          # arbitrary date (change if y
 
 # simple smooth random walk (AR(1)) so each new temp depends on previous
 ar1 <- function(n, base, phi = 0.93, sd = 0.35, start = NULL){
+  #vector of length n
   x <- numeric(n)
+
+  #make sure initial value is near  or given starter value
   x[1] <- if (is.null(start)) rnorm(1, base, sd) else start
   for(i in 2:n){
+    #phi is close to 1 meaning smooth ish series
+    #sd is small so step by step is small realistic changes in temperatures
+    # curr val depends on prev val plus random noise:
+    #AR(1) walk :
     x[i] <- base*(1-phi) + phi*x[i-1] + rnorm(1, 0, sd)
   }
   x
 }
 
+
 # asset grid
 assets <- expand_grid(
-  rack_ix   = 1:n_racks,
-  server_ix = 1:servers_per_rack,
-  gpu_ix    = 1:gpus_per_server
+  rack_ix   = 1:n_racks,   #all rack indeces
+  server_ix = 1:servers_per_rack, #all server indeces in each rack
+  gpu_ix    = 1:gpus_per_server # all gpu indices in each server
 ) %>%
   mutate(
     rack_id   = sprintf("R%02d", rack_ix),
     server_id = sprintf("%s-S%02d", rack_id, server_ix),
     asset_id  = sprintf("GPU-%s-G%02d", server_id, gpu_ix),
-    room_id   = room_label,
+    room_id   = room_label, # room id stays the same 
+
+    
     # small offsets so each GPU has a slightly different baseline
     rack_off   = rnorm(n(),  0.5, 0.2),
     server_off = rnorm(n(),  2.0, 0.5),
     gpu_off    = rnorm(n(), 10.0, 1.0),
-    #base_temp  = 55 + rack_off + server_off + gpu_off  # ~67°C average baseline
+
+    #this is different than the constant baseline for the normal dataset 
+    #becuse it samples a baseline PER gpu
+    #this means each gpu starts at a different temp meaning some can start hot or cold 
+    #this leads to realistic data where nto all gpus are in use at once
     base_temp  = rnorm(n(), mean = 65, sd = 12) + rack_off + server_off + gpu_off
   )
 
 # time columns: index + real time
 ts_vec   <- sprintf("t_%03d", 1:n_points)
+
+#real timestamp for 96 steps
 time_vec <- start_date + start_clock + minutes(0:(n_points-1) * step_min)
 
 # simulate per GPU
 df <- lapply(seq_len(nrow(assets)), function(i){
-  a <- assets[i, ]
+  a <- assets[i, ] # pick ith gpu row
+
   # asset temp evolves off its previous value (AR1)
   asset <- ar1(n_points, base = a$base_temp, phi = 0.60, sd = 0.8)
-  asset <- pmin(pmax(asset, 10), 125)  # clamp to an unreasonable range
+
+  # clamp to an unreasonable range
+  asset <- pmin(pmax(asset, 10), 125)  
   
   tibble(
-    ts                 = ts_vec,
+    ts                 = ts_vec,      #time frame form 0 to 96 of ith gpu
     time               = time_vec,     # real clock time
-    asset_id           = a$asset_id,
-    server_id          = a$server_id,
-    rack_id            = a$rack_id,
+    asset_id           = a$asset_id,   #asset id of ith gpu
+    server_id          = a$server_id,  #server id of ith gpu
+    rack_id            = a$rack_id,    #rack id of ith gpu
     room_id            = a$room_id,
-    asset_temp_inlet_c = round(asset, 2),
-    rack_inlet_c       = round(asset, 2),  # exact copies per your request
-    room_temp_c        = round(asset, 2),
-    server_temp_c      = round(asset, 2)
+    asset_temp_inlet_c = round(asset, 2), #generated temp of ith gpu
+    rack_inlet_c       = round(asset, 2),  # copy of asset temp
+    room_temp_c        = round(asset, 2),   #copy of asset temp
+    server_temp_c      = round(asset, 2)   #copy of asset temp
   )
 }) %>% bind_rows()
 
@@ -75,9 +95,6 @@ df <- df %>%
   select(ts, time, asset_id, server_id, rack_id, room_id,
          asset_temp_inlet_c, rack_inlet_c, room_temp_c, server_temp_c)
 
-# write it
-write_csv(df, "spc_dataset.csv")
+# write  to csv file
+write_csv(df, "crazy_data.csv")
 
-# quick peek
-cat("Rows:", nrow(df), " | Cols:", ncol(df), "\n")
-print(head(df, 5))
