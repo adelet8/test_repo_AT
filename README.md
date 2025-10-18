@@ -40,3 +40,5 @@ https://shiny.posit.co/r/gallery/#user-showcase
 good example :
 https://shiny.posit.co/r/gallery/miscellaneous/lego-world/
 
+https://www.servermania.com/kb/articles/gpu-temperature-range-guide
+
