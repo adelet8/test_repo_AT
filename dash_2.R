@@ -14,7 +14,7 @@ library(plotly)   # install.packages("plotly") if needed
 library(scales)
 
 # ---- SPC helpers (SPC.R must be in the same directory) ----
-source("SPC.R")
+source("/cloud/project/Hackathon/SPC.r")
 set_theme()  # from SPC.R
 
 `%||%` <- function(a,b) if (!is.null(a)) a else b
@@ -313,6 +313,9 @@ server <- function(input, output, session){
       pdat <- pdat %>% transmute(t=t_idx, y=y)
     }
     
+    oos_high <- pdat %>% filter(y > input$usl)
+    oos_low <- pdat %>% filter(y < input$lsl)
+    
     # Control limits on current series
     cl <- ctrl_limits(pdat$y)
     
@@ -323,10 +326,14 @@ server <- function(input, output, session){
       geom_hline(yintercept = cl$LCL, linetype="dashed", color="#d62728") +
       geom_hline(yintercept = cl$UCL, linetype="dashed", color="#d62728") +
       geom_hline(yintercept = cl$mean, linetype="dotdash", color="#1f77b4") +
+      
       # OPTIONAL: Specification limits (do not affect control limits)
       { if (isTRUE(input$show_specs)) geom_hline(yintercept = input$lsl, linetype="longdash") } +
       { if (isTRUE(input$show_specs)) geom_hline(yintercept = input$usl, linetype="longdash") } +
-      labs(x="t (minute index)", y="°C", title = title,
+      { if (isTRUE(input$show_specs)) geom_point(data = oos_high, aes(t,y), color = "red3", size = 0.9, alpha = 0.5)}+
+      { if (isTRUE(input$show_specs)) geom_point(data = oos_low, aes(t,y), color = "blue", size = 0.9, alpha = 0.5)}+
+      
+      labs(x="t (5-minute timestep)", y="°C", title = title,
            subtitle = paste0(
              "μ=", round(cl$mean,2), "   σ=", round(cl$sd,2),
              "   LCL=", round(cl$LCL,2), "   UCL=", round(cl$UCL,2),
@@ -351,10 +358,12 @@ server <- function(input, output, session){
       geom_vline(xintercept = cl$LCL, linetype="dashed", color="#d62728") +
       geom_vline(xintercept = cl$UCL, linetype="dashed", color="#d62728") +
       geom_vline(xintercept = cl$mean, linetype="dotdash", color="#1f77b4") +
+      
       # OPTIONAL: spec limits
       { if (isTRUE(input$show_specs)) geom_vline(xintercept = input$lsl, linetype="longdash") } +
       { if (isTRUE(input$show_specs)) geom_vline(xintercept = input$usl, linetype="longdash") } +
-      labs(x="°C", y="Density",
+     
+       labs(x="°C", y="Density",
            subtitle = paste0(
              "μ=", round(m,2), ", σ=", round(s,2),
              " | LCL=", round(cl$LCL,2), ", UCL=", round(cl$UCL,2),
@@ -395,6 +404,7 @@ server <- function(input, output, session){
       tags$small("Specs (if shown) reflect requirements; control limits reflect process stability.")
     )
   })
+  
   
   # -------- SPC panel (uses SPC.R) --------
   output$spc_picker <- renderUI({
