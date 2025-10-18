@@ -4,7 +4,7 @@
 
  The purpose is to provide transparent, actionable information for every layer of the data center ecosystem. The dashboard allows anyone from on-site maintenance employees to higher-level stakeholders, to quickly identify and respond to GPU instability.
 
-## Specifically, the system answers two key questions:
+Specifically, the system answers two key questions:
 
 
 a) When and where are GPU failures occurring within the data center?
