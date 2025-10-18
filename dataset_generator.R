@@ -31,6 +31,7 @@ ar1 <- function(n, base, phi = 0.93, sd = 0.35, start = NULL){
   for(i in 2:n){
     #phi is close to 1 meaning smooth ish series
     #sd is small so step by step is small realistic changes in temperatures
+    # curr val depends on prev val plus random noise:
     #AR(1) walk :
     x[i] <- base*(1-phi) + phi*x[i-1] + rnorm(1, 0, sd)
   }
