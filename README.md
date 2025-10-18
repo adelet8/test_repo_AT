@@ -30,3 +30,7 @@ asset_id,asset_type,server_id,rack_id,room_id,asset_temp_C,rack_temp_C,humidity_
 GPU-A100-001,GPU,srv-1B-01,1B,Room-01,70,23,42,OK
 CPU-64C-001,CPU,srv-1B-02,1B,Room-01,61,23,41,OK
 GPU-A100-008,GPU,srv-3C-01,3C,Room-02,88,25,46,FAIL
+
+
+https://shiny.posit.co/r/gallery/#user-showcase
+
