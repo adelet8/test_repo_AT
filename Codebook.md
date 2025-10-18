@@ -1,4 +1,8 @@
+
+
 # Datacenter Dataset Codebook
+
+This dataset contains temperature and metadata from datacenter components, sampled every 5 minutes (12 samples/hour).
 
 | Variable | Description | Type | Units | Example |
 |-----------|-------------|------|--------|----------|
@@ -14,3 +18,7 @@
 | **rack_inlet_c** | Rack inlet air temperature at sample time | double | °C | `25.0` |
 | **room_temp_c** | Room ambient temperature at sample time | double | °C | `23.5` |
 | **asset_type** *(optional)* | Asset class (e.g., GPU, CPU, ACC) | string | – | `GPU` |
+
+
+**Hierarchy:** room_id → rack_id → server_id → asset_id  
+**Primary key:** (time, asset_id)
