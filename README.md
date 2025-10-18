@@ -25,7 +25,7 @@ crazy_data.csv — synthetic anomaly dataset used to validate SPC detection thre
 Each dataset represents a different layer of operational insight — from macro system health to micro component stability, allowing engineers to visualize and anticipate performance degradation in real-time.
 
 
-## TEAM
+## TEAM : Six Sigma Warriors
 
 Brandy Kinnunen, Juan Rodriguez, Adele Thompson, Michael Fizdale
 
