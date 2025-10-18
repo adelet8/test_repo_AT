@@ -155,7 +155,7 @@ This layered approach ensures:
 
   ## Conclusion
 
-  The dashboard will allow users to gain a quick and visual means for identifying failed GPUs and tracking trends that could indicate elevated risk of concern.
+  The dashboard will allow users to gain a quick and visual means for identifying failed GPUs and tracking trends that could indicate elevated risk of concern. The flexible design of it allows it to be adaptable to different data center layouts and component composition; can be scaled as necessary for various data center sizes; and, with minor edits, can be adapted to different time steps or metric measurements. Therefore, this tool has proven itself not only useful for understanding our test datasets, but has also proven its potential for broader applications.
 
 
 
