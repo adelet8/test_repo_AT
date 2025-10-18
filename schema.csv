@@ -1,0 +1,9 @@
+ts	asset_id	asset_type	server_id	rack_id	room_id	asset_temp_inlet_c	rack_inlet_c	room_temp_c	server_temp_c
+t_0	GPU-srv-nyc1-001-0	GPU	srv-nyc1-001	A01	DC-Room-1	23.677	23.617	22.825	29.666
+t_0	GPU-srv-nyc1-002-0	GPU	srv-nyc1-002	A01	DC-Room-1	23.607	23.617	22.825	29.686
+t_0	GPU-srv-nyc1-003-0	GPU	srv-nyc1-003	A01	DC-Room-1	23.647	23.617	22.825	29.624
+t_0	GPU-srv-nyc1-004-0	GPU	srv-nyc1-004	A02	DC-Room-1	23.785	23.764	22.825	29.762
+t_0	GPU-srv-nyc1-005-0	GPU	srv-nyc1-005	A02	DC-Room-1	23.745	23.764	22.825	29.757
+t_0	GPU-srv-nyc1-006-0	GPU	srv-nyc1-006	A02	DC-Room-1	23.687	23.764	22.825	29.601
+t_1	GPU-srv-nyc1-001-0	GPU	srv-nyc1-001	A01	DC-Room-1	23.515	23.552	22.812	29.445
+t_1	GPU-srv-nyc1-002-0	GPU	srv-nyc1-002	A01	DC-Room-1	23.61	23.552	22.812	29.599
