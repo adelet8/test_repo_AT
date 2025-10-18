@@ -96,7 +96,7 @@ df <- df %>%
          asset_temp_inlet_c, rack_inlet_c, room_temp_c, server_temp_c)
 
 # save as csv
-write_csv(df, "spc_dataset.csv")
+write_csv(df, "official_dataset.csv")
 
 
 
